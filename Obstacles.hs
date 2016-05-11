@@ -1,4 +1,10 @@
-import Simple
+module Obstacles (
+  State(..)
+  ,update
+  ,startState
+) where
+
+import MateGames
 import ListFrame
 
 import Data.Maybe
@@ -35,13 +41,15 @@ colorPixel (xdim, ydim) pixel@(x, y) (State player _ obstacles p _)
     | elem pixel obstacles = Pixel 0xff 0x00 0x00
     | otherwise = Pixel 0x00 0x00 0x00
 
-toFrame :: (Int, Int) -> State -> ListFrame
-toFrame (xdim, ydim) state = ListFrame $ map (\y -> map (\x -> colorPixel dim (x,y) state) [0 .. xdim - 1]) [0 .. ydim - 1]
+toFrame :: (Int, Int) -> Game State -> ListFrame
+toFrame (_,_) (Dead f _) = f
+toFrame (xdim, ydim) (Running state) = ListFrame $ map (\y -> map (\x -> colorPixel dim (x,y) state) [0 .. xdim - 1]) [0 .. ydim - 1]
 
-update :: [Event String] -> State -> (ListFrame, State)
-update events state@(State player remove obstacles points seed) = (toFrame dim state', state')
-    where state' | any (\x -> elem x obstacles) player = startState seed
-                 | otherwise = State player' remove' obstacles' points' (seed + 1)
+update :: [Event String] -> Game State -> (ListFrame, Game State)
+update events (Dead f a) = (f, startState a)
+update events (Running state@(State player remove obstacles points seed)) = (toFrame dim state', state')
+    where state' | any (\x -> elem x obstacles) player = Dead gameOver seed
+                 | otherwise = Running (State player' remove' obstacles' points' (seed + 1))
           player' = foldl (\acc (Event mod ev) -> if mod == "KEYBOARD" then move dim acc ev else acc) player events
           obstacles' = filter (\x -> not $ elem x remove) (newObstacle dim state ++ oldObstacles)
           oldObstacles = filter (\(x, y) -> x >= 0) $ map (\(x, y) -> (x - 1, y)) obstacles
@@ -50,8 +58,11 @@ update events state@(State player remove obstacles points seed) = (toFrame dim s
           remove' = map (\(x, y) -> (x, (y + random) `mod` (snd dim - 1))) remove
           random  = (foldl (\acc (x, y) -> xor (acc + x) y) 0 oldObstacles) `mod` 3 - 1
 
-startState :: Seed -> State
-startState seed = State [(0,0),(0,1),(1,0),(1,1)] [(x,y) | x <- [fst dim..fst dim+3], y <- [0..3]] [] 0 seed
+startState :: Seed -> Game State
+startState seed = Running (State [(0,0),(0,1),(1,0),(1,1)] [(x,y) | x <- [fst dim..fst dim+3], y <- [0..3]] [] 0 seed)
+
+gameOver :: ListFrame
+gameOver = ListFrame [[Pixel 0xff 0x00 0x00 | x <- [1..fst dim]] | y <- [1..snd dim]]
 
 dim :: (Int, Int)
 dim = (30, 12)
