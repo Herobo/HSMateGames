@@ -1,4 +1,10 @@
-import Simple
+module Snake (
+  State(..)
+  ,update
+  ,startState
+) where
+
+import MateGames
 import ListFrame
 
 import Data.Maybe
@@ -46,13 +52,15 @@ colorPixel (xdim, ydim) pixel@(x, y) (State snake target p _ _)
                                             | pixel == target = Pixel 0xff 0x00 0x00
                                             | otherwise = Pixel 0x00 0x00 0x00
 
-toFrame :: (Int, Int) -> State -> ListFrame
-toFrame (xdim, ydim) state = ListFrame $ map (\y -> map (\x -> colorPixel (xdim, ydim) (x, y) state) [0 .. xdim - 1]) [0 .. ydim - 1]
+toFrame :: (Int, Int) -> Game State -> ListFrame
+toFrame (xdim, ydim) (Running state) = ListFrame $ map (\y -> map (\x -> colorPixel (xdim, ydim) (x, y) state) [0 .. xdim - 1]) [0 .. ydim - 1]
+toFrame (_,_) (Dead f _) = f
 
-update :: [Event String] -> State -> (ListFrame, State)
-update events (State snake@(x:xs) target points seed dir) = (toFrame dim state', state')
-    where state'  | elem x xs = startState seed
-                  | otherwise = State snake' target' points' (seed + 1) dir'
+update :: [Event String] -> Game State -> (ListFrame, Game State)
+update events (Dead f a) = (f, startState a)
+update events (Running (State snake@(x:xs) target points seed dir)) = (toFrame dim state', state')
+    where state'  | elem x xs = Dead gameOver seed
+                  | otherwise = Running (State snake' target' points' (seed + 1) dir')
           points' = if x == target then points + 1 else points
           dir'    = foldl (\acc (Event mod ev) -> if mod == "KEYBOARD" then newDirection dir acc ev else acc) dir events
           snake'  | x == target = move dim x dir : snake
@@ -60,8 +68,11 @@ update events (State snake@(x:xs) target points seed dir) = (toFrame dim state',
           target' | x == target = generateTarget snake' dim seed
                   | otherwise   = target
 
-startState :: Int -> State
-startState seed = State startSnake (generateTarget startSnake dim seed) 0 seed R
+gameOver :: ListFrame
+gameOver = ListFrame [[Pixel 0xff 0x00 0x00 | x <- [1..fst dim]] | y <- [1..snd dim]]
+
+startState :: Int -> Game State
+startState seed = Running (State startSnake (generateTarget startSnake dim seed) 0 seed R)
 
 startSnake :: [(Int,Int)]
 startSnake = [(2,0), (1,0),(0,0)]

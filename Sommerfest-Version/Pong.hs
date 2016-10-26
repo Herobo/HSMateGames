@@ -1,4 +1,10 @@
-import Simple
+module Pong (
+  State(..)
+  ,update
+  ,startState
+) where
+
+import MateGames
 import ListFrame
 
 import Data.Maybe
@@ -29,13 +35,16 @@ colorPixel (xdim, ydim) (x, y) (State (p1, l1) (p2, l2) bs _)
     | x == xdim - 1 && abs (y - p2) < playerWidth = Pixel 0xFF 0xFF 0xFF
     | otherwise = Pixel 0x00 0x00 0x00
 
-toFrame :: (Int, Int) -> State -> ListFrame
-toFrame (xdim, ydim) state = ListFrame $ map (\y -> map (\x -> colorPixel dim (x,y) state) [0 .. xdim - 1]) [0 .. ydim - 1]
+toFrame :: (Int, Int) -> Game State -> ListFrame
+toFrame (xdim, ydim) (Running state) = ListFrame $ map (\y -> map (\x -> colorPixel dim (x,y) state) [0 .. xdim - 1]) [0 .. ydim - 1]
+toFrame (_,_) (Dead f _) = f
 
-update :: [Event String] -> State -> (ListFrame, State)
-update events (State (p1, l1) (p2, l2) ball@((bx, by):_) (dx, dy)) = (toFrame dim state', state')
-    where state' | l1' <= 0 || l2' <= 0 = startState dim
-                 | otherwise            = State (p1', l1') (p2', l2') ((bx',by'):init ball) (dx',dy')
+update :: [Event String] -> Game State -> (ListFrame, Game State)
+update events (Dead f _) = (f, startState dim)
+update events (Running (State (p1, l1) (p2, l2) ball@((bx, by):_) (dx, dy))) = (toFrame dim state', state')
+    where state' | l1' <= 0 = Dead (gameOver1 dim) 0
+                 | l2' <= 0 = Dead (gameOver2 dim) 0
+                 | otherwise            = Running (State (p1', l1') (p2', l2') ((bx',by'):init ball) (dx',dy'))
           (p1', p2') = foldl (\acc (Event mod ev) -> if mod == "KEYBOARD" then move (snd dim) acc ev else acc) (p1, p2) events
           (bx', by') = (bx + dx, by + dy)
           l1' = if round bx' <= 0 then l1 - 1 else l1
@@ -51,11 +60,14 @@ update events (State (p1, l1) (p2, l2) ball@((bx, by):_) (dx, dy)) = (toFrame di
                  | round bx' >= fst dim - 1 = -abs dx
                  | otherwise = dx
 
-startState :: (Int, Int) -> State
-startState (x,y) = State (quot y 2 - 1, 3) (quot y 2 - 1, 3) (replicate 2 (1, fromIntegral y / 2 - 1)) (sqrt 0.5, sqrt 0.5)
+startState :: (Int, Int) -> Game State
+startState (x,y) = Running (State (quot y 2 - 1, 3) (quot y 2 - 1, 3) (replicate 2 (1, fromIntegral y / 2 - 1)) (sqrt 0.5, sqrt 0.5))
 
 dim :: (Int, Int)
 dim = (30, 12)
+
+gameOver1 (xdim, ydim) = ListFrame $ map (\y -> map (\x -> if x < quot xdim 2 then Pixel 0xff 0x00 0x00 else Pixel 0x00 0xff 0x00 ) [0 .. xdim - 1]) [0 .. ydim - 1]
+gameOver2 (xdim, ydim) = ListFrame $ map (\y -> map (\x -> if x >= quot xdim 2 then Pixel 0xff 0x00 0x00 else Pixel 0x00 0xff 0x00 ) [0 .. xdim - 1]) [0 .. ydim - 1]
 
 playerWidth :: Int
 playerWidth = 2
